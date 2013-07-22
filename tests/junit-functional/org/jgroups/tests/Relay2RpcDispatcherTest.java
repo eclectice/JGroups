@@ -65,9 +65,19 @@ public class Relay2RpcDispatcherTest {
     @AfterMethod protected void destroy() {Util.close(y,x,b,a);}
 
 
+    public void testRpcToUnknownSite() throws Exception {
+        a.connect(LON_CLUSTER);
+        try {
+            rpca.callRemoteMethod(new SiteMaster("nyc"),"foo",null,null,RequestOptions.SYNC());
+            assert false : "The RPC should have thrown an UnreachableException";
+        }
+        catch(UnreachableException unreachable) {
+            System.out.println("caught " + unreachable.getClass().getSimpleName() + " - as expected");
+        }
+    }
+
     /**
      * Tests that notifications are routed to all sites.
-     * 
      */
     public void testNotificationAndRpcRelay2Transit() throws Exception {
     	a.connect(LON_CLUSTER);
@@ -192,8 +202,8 @@ public class Relay2RpcDispatcherTest {
     protected RELAY2 createRELAY2(String site_name) {
         RELAY2 relay=new RELAY2().site(site_name).enableAddressTagging(false).asyncRelayCreation(true).relayMulticasts(true);
 
-        RelayConfig.SiteConfig lon_cfg=new RelayConfig.SiteConfig(LON, (short)0),
-          sfo_cfg=new RelayConfig.SiteConfig(SFO, (short)1);
+        RelayConfig.SiteConfig lon_cfg=new RelayConfig.SiteConfig(LON),
+          sfo_cfg=new RelayConfig.SiteConfig(SFO);
 
         lon_cfg.addBridge(new RelayConfig.ProgrammaticBridgeConfig(BRIDGE_CLUSTER, createBridgeStack()));
         sfo_cfg.addBridge(new RelayConfig.ProgrammaticBridgeConfig(BRIDGE_CLUSTER, createBridgeStack()));
@@ -254,23 +264,6 @@ public class Relay2RpcDispatcherTest {
         }
     }
 
-
-    protected void waitUntilStatus(String site_name, RELAY2.RouteStatus expected_status,
-                                   long timeout, long interval, JChannel ch) throws Exception {
-        RELAY2 relay=(RELAY2)ch.getProtocolStack().findProtocol(RELAY2.class);
-        if(relay == null)
-            throw new IllegalArgumentException("Protocol RELAY2 not found");
-        Relayer.Route route=null;
-        long deadline=System.currentTimeMillis() + timeout;
-        while(System.currentTimeMillis() < deadline) {
-            route=relay.getRoute(site_name);
-            if(route != null && route.status() == expected_status)
-                break;
-            Util.sleep(interval);
-        }
-        assert route.status() == expected_status : "status=" + (route != null? route.status() : "n/a")
-          + ", expected status=" + expected_status;
-    }
 
     protected Relayer.Route getRoute(JChannel ch, String site_name) {
         RELAY2 relay=(RELAY2)ch.getProtocolStack().findProtocol(RELAY2.class);

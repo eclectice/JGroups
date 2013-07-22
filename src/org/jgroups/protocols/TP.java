@@ -1022,10 +1022,6 @@ public abstract class TP extends Protocol {
         if(suppress_time_different_cluster_warnings > 0)
             suppress_log_different_cluster=new SuppressLog<Address>(log, "MsgDroppedDiffCluster", "SuppressMsg");
 
-        Util.verifyRejectionPolicy(oob_thread_pool_rejection_policy);
-        Util.verifyRejectionPolicy(thread_pool_rejection_policy);
-        Util.verifyRejectionPolicy(internal_thread_pool_rejection_policy);
-
         // ========================================== OOB thread pool ==============================
 
         if(oob_thread_pool == null
@@ -1801,8 +1797,10 @@ public abstract class TP extends Protocol {
 
             case Event.TMP_VIEW:
             case Event.VIEW_CHANGE:
+                Collection<Address> old_members;
                 synchronized(members) {
                     View view=(View)evt.getArg();
+                    old_members=new ArrayList<Address>(members);
                     members.clear();
 
                     if(!isSingleton()) {
@@ -1823,7 +1821,10 @@ public abstract class TP extends Protocol {
                     // fix for https://jira.jboss.org/jira/browse/JGRP-918
                     logical_addr_cache.retainAll(members);
                     fetchLocalAddresses();
-                    UUID.retainAll(members);
+
+                    List<Address> left_mbrs=Util.leftMembers(old_members,members);
+                    if(left_mbrs != null && !left_mbrs.isEmpty())
+                        UUID.removeAll(left_mbrs);
 
                     if(suppress_log_different_version != null)
                         suppress_log_different_version.removeExpired(suppress_time_different_version_warnings);
@@ -2400,8 +2401,6 @@ public abstract class TP extends Protocol {
         protected SocketFactory socket_factory=new DefaultSocketFactory();
         Address                 local_addr;
 
-        // kludge, only used by TUNNEL
-        static final ThreadLocal<ProtocolAdapter> thread_local=new ThreadLocal<ProtocolAdapter>();
 
         public ProtocolAdapter(String cluster_name, Address local_addr, short transport_id, Protocol up, Protocol down, String pattern) {
             this.cluster_name=cluster_name;
@@ -2486,14 +2485,10 @@ public abstract class TP extends Protocol {
                     members.clear();
                     members.addAll(tmp);
                     break;
-                case Event.DISCONNECT:
-                    thread_local.set(this);
-                    break;
                 case Event.CONNECT:
                 case Event.CONNECT_WITH_STATE_TRANSFER:
                 case Event.CONNECT_USE_FLUSH:
                 case Event.CONNECT_WITH_STATE_TRANSFER_USE_FLUSH:  
-                    thread_local.set(this);
                     cluster_name=(String)evt.getArg();
                     factory.setClusterName(cluster_name);
                     this.header=new TpHeader(cluster_name);
